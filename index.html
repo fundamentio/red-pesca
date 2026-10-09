@@ -51,7 +51,7 @@
       </label>
       <div id="matChips" class="mat-chips" role="group" aria-label="Materiales"></div>
       <div class="row2">
-        <label>Cantidad
+        <label>Cantidad<span id="qtyUnit"></span>
           <input name="qty" type="number" inputmode="decimal" min="0" step="any" placeholder="1">
         </label>
         <label>Costo unitario
@@ -121,7 +121,7 @@
   <dialog id="matDialog" class="sheet">
     <div class="sheet-handle" aria-hidden="true"></div>
     <h2 tabindex="-1" autofocus>Lista de materiales</h2>
-    <p class="hint">Aparecen al editar un paño. Al elegir un material se llena su costo unitario; el precio se actualiza solo con el último costo que guardes.</p>
+    <p class="hint">Aparecen al editar un paño. Al elegir un material se llena su costo unitario; el precio se actualiza solo con el último costo que guardes. Precios base: referencia estimada en USD.</p>
     <ul id="matList" class="mat-list"></ul>
     <form id="matAddForm" class="mat-add">
       <input name="matName" type="text" maxlength="80" placeholder="Nuevo material" autocomplete="off" required aria-label="Nombre del material">

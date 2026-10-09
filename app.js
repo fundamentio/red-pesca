@@ -10,23 +10,26 @@
   const net = $("#net");
 
   // ---------- Estado ----------
-  // Lista base de materiales (precio vacío = el usuario lo define)
+  // Lista base de materiales con precio de referencia (USD, minorista estimado)
+  // y unidad en la que se mide la cantidad.
   const DEFAULT_MATERIALS = [
-    "Paño de red multifilamento",
-    "Paño de red monofilamento",
-    "Hilo nylon 210/12",
-    "Hilo para remiendo",
-    "Relinga superior (cabo)",
-    "Relinga inferior (cabo)",
-    "Flotadores / boyas",
-    "Plomos",
-    "Cabo polipropileno",
-    "Argollas / anillos",
-    "Grilletes",
-    "Destorcedores",
-    "Mano de obra: armado",
-    "Mano de obra: remiendo",
-  ].map((name) => ({ name, price: "" }));
+    ["Paño de red multifilamento", "12", "kg"],
+    ["Paño de red monofilamento", "11", "kg"],
+    ["Hilo nylon 210/12", "8", "kg"],
+    ["Hilo para remiendo", "8", "kg"],
+    ["Relinga superior (cabo)", "4.5", "kg"],
+    ["Relinga inferior (cabo)", "7", "kg"],
+    ["Flotadores / boyas", "0.35", "unidad"],
+    ["Plomos", "5", "kg"],
+    ["Cabo polipropileno", "4", "kg"],
+    ["Argollas / anillos", "1", "unidad"],
+    ["Grilletes", "1.5", "unidad"],
+    ["Destorcedores", "2", "unidad"],
+    ["Mano de obra: armado", "25", "jornal"],
+    ["Mano de obra: remiendo", "20", "jornal"],
+  ].map(([name, price, per]) => ({ name, price, per }));
+  const MAT_VERSION = 2; // 2 = lista con precios y unidades
+  const DEFAULT_BY_NAME = new Map(DEFAULT_MATERIALS.map((m) => [m.name.toLowerCase(), m]));
 
   let state = load();
 
@@ -39,15 +42,16 @@
           return {
             currency: parsed.currency || "USD",
             cells: parsed.cells,
-            materials: cleanMaterials(parsed.materials),
+            materials: cleanMaterials(parsed.materials, parsed.matV !== MAT_VERSION),
+            matV: MAT_VERSION,
           };
         }
       }
     } catch (_) { /* almacenamiento no disponible */ }
-    return { currency: "USD", cells: {}, materials: cleanMaterials() };
+    return { currency: "USD", cells: {}, materials: cleanMaterials(), matV: MAT_VERSION };
   }
 
-  function cleanMaterials(list) {
+  function cleanMaterials(list, fillDefaults = false) {
     if (!Array.isArray(list)) return DEFAULT_MATERIALS.map((m) => ({ ...m }));
     const seen = new Set();
     const out = [];
@@ -57,7 +61,16 @@
       if (!name || seen.has(k)) continue;
       seen.add(k);
       const p = m.price;
-      out.push({ name, price: p === "" || p == null || isNaN(Number(p)) ? "" : String(Math.max(0, Number(p))) });
+      let price = p === "" || p == null || isNaN(Number(p)) ? "" : String(Math.max(0, Number(p)));
+      let per = String(m.per || "").trim().slice(0, 12);
+      // Listas guardadas antes de tener precios: completar con la referencia
+      // sin pisar lo que el usuario ya puso.
+      const base = DEFAULT_BY_NAME.get(k);
+      if (base && fillDefaults) {
+        if (price === "") price = base.price;
+        if (!per) per = base.per;
+      }
+      out.push(per ? { name, price, per } : { name, price });
     }
     return out;
   }
@@ -240,11 +253,14 @@
   const norm = (s) => String(s || "").trim().toLowerCase();
   const findMaterial = (name) => state.materials.find((m) => norm(m.name) === norm(name));
 
+  const qtyUnit = $("#qtyUnit");
   function renderChips() {
     const current = norm(form.concept.value);
+    const sel = findMaterial(current);
+    qtyUnit.textContent = sel && sel.per ? ` (${sel.per})` : "";
     let html = "";
     state.materials.forEach((m, i) => {
-      const price = m.price !== "" ? `<small>${esc(money.format(Number(m.price)))}</small>` : "";
+      const price = m.price !== "" ? `<small>${esc(money.format(Number(m.price)))}${m.per ? "/" + esc(m.per) : ""}</small>` : "";
       html += `<button type="button" class="mat-chip" data-i="${i}" aria-pressed="${norm(m.name) === current}">${esc(m.name)}${price}</button>`;
     });
     if (current && !findMaterial(current)) {
@@ -473,7 +489,8 @@
       state = {
         currency: data.currency || state.currency,
         cells,
-        materials: Array.isArray(data.materials) ? cleanMaterials(data.materials) : state.materials,
+        materials: Array.isArray(data.materials) ? cleanMaterials(data.materials, data.matV !== MAT_VERSION) : state.materials,
+        matV: MAT_VERSION,
       };
       setFormatter();
       save();
