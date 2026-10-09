@@ -200,7 +200,7 @@ main { padding: 6px var(--gutter) calc(env(safe-area-inset-bottom) + 40px); }
 }
 .scrim[hidden] { display: none; }
 .sheet-handle { width: 40px; height: 4px; border-radius: 4px; background: var(--muted); opacity: .5; margin: 4px auto 10px; }
-.sheet h2 { font-size: 18px; margin: 0 0 12px; }
+.sheet h2 { font-size: 18px; margin: 0 0 12px; outline: none; }
 .sheet h3 { font-size: 14px; color: var(--muted); margin: 18px 0 8px; }
 
 label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
@@ -235,6 +235,40 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 .btn.ghost { background: transparent; color: var(--ink); border-color: rgba(255,255,255,.18); }
 .btn.danger { color: var(--danger); border-color: rgba(255,107,107,.4); }
 .actions .danger { margin-right: auto; }
+
+/* Materiales: chips para elegir con un toque */
+.mat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -4px 0 14px;
+  max-height: 140px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.mat-chip {
+  border: 1px solid rgba(201, 166, 107, .45);
+  background: var(--surface-2);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 8px 12px;
+  min-height: 36px;
+  font: inherit;
+  font-size: 14px;
+  touch-action: manipulation;
+}
+.mat-chip small { color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+.mat-chip:active { background: rgba(255, 181, 71, .3); }
+.mat-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #2a1a00; font-weight: 600; }
+.mat-chip[aria-pressed="true"] small { color: #5a3d00; }
+.mat-chip.add { border-style: dashed; color: var(--accent); background: transparent; }
+
+.mat-list { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; }
+.mat-list li, .mat-add { display: grid; grid-template-columns: 1fr 96px 44px; gap: 6px; align-items: center; }
+.mat-list li.empty { display: block; color: var(--muted); font-size: 14px; }
+.mat-list input, .mat-add input { margin: 0; padding: 10px; }
+.mat-del { min-height: 44px; border-radius: 10px; border: 1px solid rgba(255,107,107,.4); background: transparent; color: var(--danger); font-size: 18px; }
+.mat-add .btn { padding: 0; font-size: 20px; }
 
 .menu-list { display: grid; gap: 8px; margin: 8px 0; }
 .menu-list .btn { width: 100%; text-align: left; }

@@ -10,6 +10,24 @@
   const net = $("#net");
 
   // ---------- Estado ----------
+  // Lista base de materiales (precio vacío = el usuario lo define)
+  const DEFAULT_MATERIALS = [
+    "Paño de red multifilamento",
+    "Paño de red monofilamento",
+    "Hilo nylon 210/12",
+    "Hilo para remiendo",
+    "Relinga superior (cabo)",
+    "Relinga inferior (cabo)",
+    "Flotadores / boyas",
+    "Plomos",
+    "Cabo polipropileno",
+    "Argollas / anillos",
+    "Grilletes",
+    "Destorcedores",
+    "Mano de obra: armado",
+    "Mano de obra: remiendo",
+  ].map((name) => ({ name, price: "" }));
+
   let state = load();
 
   function load() {
@@ -18,11 +36,30 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed.cells === "object") {
-          return { currency: parsed.currency || "USD", cells: parsed.cells };
+          return {
+            currency: parsed.currency || "USD",
+            cells: parsed.cells,
+            materials: cleanMaterials(parsed.materials),
+          };
         }
       }
     } catch (_) { /* almacenamiento no disponible */ }
-    return { currency: "USD", cells: {} };
+    return { currency: "USD", cells: {}, materials: cleanMaterials() };
+  }
+
+  function cleanMaterials(list) {
+    if (!Array.isArray(list)) return DEFAULT_MATERIALS.map((m) => ({ ...m }));
+    const seen = new Set();
+    const out = [];
+    for (const m of list) {
+      const name = String((m && m.name) || "").trim().slice(0, 80);
+      const k = name.toLowerCase();
+      if (!name || seen.has(k)) continue;
+      seen.add(k);
+      const p = m.price;
+      out.push({ name, price: p === "" || p == null || isNaN(Number(p)) ? "" : String(Math.max(0, Number(p))) });
+    }
+    return out;
   }
 
   function save() {
@@ -46,6 +83,10 @@
     money = new Intl.NumberFormat("es", { style: "currency", currency: state.currency });
   }
   setFormatter();
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+  }
 
   function compact(n) {
     if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, "") + "M";
@@ -173,8 +214,11 @@
     form.qty.value = item.qty ?? "";
     form.unit.value = item.unit ?? "";
     form.note.value = item.note || "";
+    renderChips();
     updateSubtotal();
     openSheet(cellDialog);
+    const sel = chips.querySelector('[aria-pressed="true"]');
+    chips.scrollTop = sel ? sel.offsetTop - chips.offsetTop - 4 : 0;
     // En móvil no forzamos el foco para no abrir el teclado sin querer
     if (matchMedia("(pointer: fine)").matches) form.concept.focus();
   }
@@ -183,6 +227,45 @@
     $("#cellSubtotal").textContent = money.format(cost({ qty: form.qty.value, unit: form.unit.value }));
   }
   form.qty.addEventListener("input", updateSubtotal);
+
+  // ---------- Materiales en la hoja del paño ----------
+  const chips = $("#matChips");
+  const norm = (s) => String(s || "").trim().toLowerCase();
+  const findMaterial = (name) => state.materials.find((m) => norm(m.name) === norm(name));
+
+  function renderChips() {
+    const current = norm(form.concept.value);
+    let html = "";
+    state.materials.forEach((m, i) => {
+      const price = m.price !== "" ? `<small>${esc(money.format(Number(m.price)))}</small>` : "";
+      html += `<button type="button" class="mat-chip" data-i="${i}" aria-pressed="${norm(m.name) === current}">${esc(m.name)}${price}</button>`;
+    });
+    if (current && !findMaterial(current)) {
+      html += `<button type="button" class="mat-chip add" data-add>＋ Guardar “${esc(form.concept.value.trim())}” en la lista</button>`;
+    }
+    chips.innerHTML = html;
+  }
+
+  chips.addEventListener("click", (e) => {
+    const b = e.target.closest(".mat-chip");
+    if (!b) return;
+    if (b.hasAttribute("data-add")) {
+      const name = form.concept.value.trim();
+      state.materials.push({ name, price: form.unit.value === "" ? "" : String(Number(form.unit.value) || 0) });
+      state.materials = cleanMaterials(state.materials);
+      save();
+      renderChips();
+      toast(`“${name}” agregado a la lista`);
+      return;
+    }
+    const m = state.materials[Number(b.dataset.i)];
+    if (!m) return;
+    form.concept.value = m.name;
+    if (m.price !== "") form.unit.value = m.price;
+    renderChips();
+    updateSubtotal();
+  });
+  form.concept.addEventListener("input", renderChips);
   form.unit.addEventListener("input", updateSubtotal);
 
   form.addEventListener("submit", (e) => {
@@ -369,7 +452,11 @@
         };
       }
       if (!confirm(`¿Reemplazar la red actual con ${Object.keys(cells).length} paños del respaldo?`)) return;
-      state = { currency: data.currency || state.currency, cells };
+      state = {
+        currency: data.currency || state.currency,
+        cells,
+        materials: Array.isArray(data.materials) ? cleanMaterials(data.materials) : state.materials,
+      };
       setFormatter();
       save();
       renderAll();
@@ -387,6 +474,74 @@
     renderAll();
     menuDialog.close();
     toast("Red vaciada");
+  });
+
+  // ---------- Gestión de la lista de materiales ----------
+  const matDialog = $("#matDialog");
+  const matList = $("#matList");
+  const matAdd = $("#matAddForm");
+
+  function renderMatList() {
+    let html = "";
+    state.materials.forEach((m, i) => {
+      html += `<li data-i="${i}">` +
+        `<input type="text" maxlength="80" value="${esc(m.name)}" data-f="name" aria-label="Nombre">` +
+        `<input type="number" inputmode="decimal" min="0" step="any" value="${esc(m.price)}" placeholder="Precio" data-f="price" aria-label="Precio de ${esc(m.name)}">` +
+        `<button type="button" class="mat-del" aria-label="Quitar ${esc(m.name)}">✕</button></li>`;
+    });
+    if (!html) html = `<li class="empty">La lista está vacía.</li>`;
+    matList.innerHTML = html;
+  }
+
+  $("#btnMaterials").addEventListener("click", () => {
+    renderMatList();
+    openSheet(matDialog);
+  });
+
+  matList.addEventListener("change", (e) => {
+    const li = e.target.closest("li[data-i]");
+    if (!li) return;
+    const m = state.materials[Number(li.dataset.i)];
+    if (e.target.dataset.f === "name") {
+      const name = e.target.value.trim();
+      if (!name || (findMaterial(name) && findMaterial(name) !== m)) {
+        e.target.value = m.name;
+        if (name) toast("Ese material ya está en la lista");
+        return;
+      }
+      m.name = name.slice(0, 80);
+    } else {
+      m.price = e.target.value === "" ? "" : String(Math.max(0, Number(e.target.value) || 0));
+    }
+    save();
+  });
+
+  matList.addEventListener("click", (e) => {
+    const del = e.target.closest(".mat-del");
+    if (!del) return;
+    state.materials.splice(Number(del.closest("li").dataset.i), 1);
+    save();
+    renderMatList();
+  });
+
+  matAdd.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = matAdd.matName.value.trim();
+    if (!name) return;
+    if (findMaterial(name)) return toast("Ese material ya está en la lista");
+    state.materials.push({ name, price: matAdd.matPrice.value });
+    state.materials = cleanMaterials(state.materials);
+    save();
+    renderMatList();
+    matAdd.reset();
+    toast(`“${name}” agregado`);
+  });
+
+  $("#btnMatDefaults").addEventListener("click", () => {
+    if (!confirm("¿Volver a la lista base? Se pierden los materiales y precios que agregaste.")) return;
+    state.materials = cleanMaterials();
+    save();
+    renderMatList();
   });
 
   // ---------- Utilidades ----------

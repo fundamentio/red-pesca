@@ -45,10 +45,11 @@
   <dialog id="cellDialog" class="sheet">
     <form method="dialog" id="cellForm">
       <div class="sheet-handle" aria-hidden="true"></div>
-      <h2 id="cellTitle">Paño</h2>
+      <h2 id="cellTitle" tabindex="-1" autofocus>Paño</h2>
       <label>Concepto
-        <input name="concept" type="text" maxlength="80" placeholder="Ej. Hilo nylon 210/12" autocomplete="off">
+        <input name="concept" type="text" maxlength="80" placeholder="Elige un material o escribe" autocomplete="off">
       </label>
+      <div id="matChips" class="mat-chips" role="group" aria-label="Materiales"></div>
       <div class="row2">
         <label>Cantidad
           <input name="qty" type="number" inputmode="decimal" min="0" step="any" placeholder="1">
@@ -72,7 +73,7 @@
   <!-- Resumen -->
   <dialog id="summaryDialog" class="sheet">
     <div class="sheet-handle" aria-hidden="true"></div>
-    <h2>Resumen</h2>
+    <h2 tabindex="-1" autofocus>Resumen</h2>
     <dl class="stats">
       <div><dt>Total</dt><dd id="sTotal">$0.00</dd></div>
       <div><dt>Paños con costo</dt><dd id="sCount">0</dd></div>
@@ -89,7 +90,7 @@
   <!-- Menú -->
   <dialog id="menuDialog" class="sheet">
     <div class="sheet-handle" aria-hidden="true"></div>
-    <h2>Más opciones</h2>
+    <h2 tabindex="-1" autofocus>Más opciones</h2>
     <label>Moneda
       <select id="currency">
         <option value="USD">USD — Dólar</option>
@@ -102,6 +103,7 @@
       </select>
     </label>
     <div class="menu-list">
+      <button type="button" class="btn ghost" id="btnMaterials">Lista de materiales</button>
       <button type="button" class="btn ghost" id="btnCsv">Exportar CSV</button>
       <button type="button" class="btn ghost" id="btnJson">Respaldar (JSON)</button>
       <label class="btn ghost file">Restaurar (JSON)
@@ -112,6 +114,23 @@
     <p class="hint">Los datos se guardan en este navegador.</p>
     <div class="actions">
       <button type="button" class="btn primary" data-close>Cerrar</button>
+    </div>
+  </dialog>
+
+  <!-- Lista de materiales -->
+  <dialog id="matDialog" class="sheet">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <h2 tabindex="-1" autofocus>Lista de materiales</h2>
+    <p class="hint">Aparecen al editar un paño. Si les pones precio, se usa como costo unitario al elegirlos.</p>
+    <ul id="matList" class="mat-list"></ul>
+    <form id="matAddForm" class="mat-add">
+      <input name="matName" type="text" maxlength="80" placeholder="Nuevo material" autocomplete="off" required aria-label="Nombre del material">
+      <input name="matPrice" type="number" inputmode="decimal" min="0" step="any" placeholder="Precio" aria-label="Precio unitario">
+      <button type="submit" class="btn primary" aria-label="Agregar material">＋</button>
+    </form>
+    <div class="actions">
+      <button type="button" class="btn ghost" id="btnMatDefaults">Restaurar lista base</button>
+      <button type="button" class="btn primary" data-close>Listo</button>
     </div>
   </dialog>
 

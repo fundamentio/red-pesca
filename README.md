@@ -6,6 +6,7 @@ Toca cualquier paño para registrar concepto, cantidad, costo unitario y nota; e
 - Total general y conteo de paños en la barra superior.
 - Paños coloreados según su costo relativo (mapa de calor).
 - Toca el número de fila para ver su subtotal; "Resumen" lista todas las filas con costo.
+- Lista de materiales editable (con precio opcional): se elige con un toque al editar un paño.
 - Exportar CSV, respaldar/restaurar JSON, cambiar moneda.
 - Datos guardados en `localStorage` del navegador.
 
