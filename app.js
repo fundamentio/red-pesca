@@ -293,7 +293,15 @@
     }
     updateSubtotal();
   });
-  form.concept.addEventListener("input", renderChips);
+  form.concept.addEventListener("input", () => {
+    renderChips();
+    // Si lo escrito coincide con un material con precio, llenar el costo
+    const m = findMaterial(form.concept.value);
+    if (m && m.price !== "") {
+      form.unit.value = m.price;
+      updateSubtotal();
+    }
+  });
   form.unit.addEventListener("input", updateSubtotal);
 
   form.addEventListener("submit", (e) => {
