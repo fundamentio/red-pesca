@@ -80,7 +80,14 @@
   // ---------- Formato ----------
   let money;
   function setFormatter() {
-    money = new Intl.NumberFormat("es", { style: "currency", currency: state.currency });
+    // Punto decimal y coma para miles: 1,234.50
+    const nf = new Intl.NumberFormat("es-MX", { style: "currency", currency: state.currency, currencyDisplay: "narrowSymbol" });
+    const symbol = { PEN: "S/ " }[state.currency];
+    money = {
+      format: (n) => symbol
+        ? nf.formatToParts(n).map((p) => (p.type === "currency" ? symbol : p.value)).join("").replace(/\s+/g, " ")
+        : nf.format(n),
+    };
   }
   setFormatter();
 
@@ -261,8 +268,13 @@
     const m = state.materials[Number(b.dataset.i)];
     if (!m) return;
     form.concept.value = m.name;
-    if (m.price !== "") form.unit.value = m.price;
     renderChips();
+    if (m.price !== "") {
+      form.unit.value = m.price;
+    } else {
+      // Sin precio aún: llevar directo al costo unitario para escribirlo una sola vez
+      form.unit.focus();
+    }
     updateSubtotal();
   });
   form.concept.addEventListener("input", renderChips);
@@ -279,6 +291,12 @@
       note: form.note.value.trim(),
     };
     const empty = !item.concept && !item.note && item.unit === "" && item.qty === "";
+    // Recordar el último costo unitario usado para ese material
+    const mat = item.concept && findMaterial(item.concept);
+    if (mat && item.unit !== "") {
+      const price = String(Math.max(0, Number(item.unit) || 0));
+      if (mat.price !== price) mat.price = price;
+    }
     if (empty) delete state.cells[key(r, c)];
     else state.cells[key(r, c)] = item;
     cellDialog.close();
