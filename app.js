@@ -56,33 +56,17 @@
 
   // ---------- Construcción de la red ----------
   function build() {
-    const frag = document.createDocumentFragment();
+    // Un solo innerHTML es mucho más rápido que crear 2200 nodos uno a uno
+    let html = "";
     for (let r = 0; r < ROWS; r++) {
-      const row = document.createElement("div");
-      row.className = "net-row" + ((r + 1) % 10 === 0 ? " mark" : "");
-      row.setAttribute("role", "row");
-
-      const rl = document.createElement("button");
-      rl.type = "button";
-      rl.className = "rowlabel";
-      rl.dataset.row = r;
-      rl.textContent = r + 1;
-      rl.setAttribute("aria-label", `Total de la fila ${r + 1}`);
-      row.appendChild(rl);
-
+      html += `<div class="net-row${(r + 1) % 10 === 0 ? " mark" : ""}" role="row">` +
+        `<button type="button" class="rowlabel" data-row="${r}" aria-label="Total de la fila ${r + 1}">${r + 1}</button>`;
       for (let c = 0; c < COLS; c++) {
-        const cell = document.createElement("button");
-        cell.type = "button";
-        cell.className = "cell";
-        cell.dataset.r = r;
-        cell.dataset.c = c;
-        cell.setAttribute("role", "gridcell");
-        cell.appendChild(document.createElement("span"));
-        row.appendChild(cell);
+        html += `<button type="button" class="cell" data-r="${r}" data-c="${c}" role="gridcell" aria-label="Paño ${label(r, c)}: vacío"><span></span></button>`;
       }
-      frag.appendChild(row);
+      html += "</div>";
     }
-    net.appendChild(frag);
+    net.innerHTML = html;
   }
 
   function cellEl(r, c) {
@@ -90,42 +74,90 @@
   }
 
   // ---------- Render ----------
-  function render() {
-    let total = 0, count = 0, max = 0;
-    const rowTotals = new Array(ROWS).fill(0);
+  // Se actualiza sólo lo que cambia: el paño editado, su fila y los totales.
+  // Los niveles de color dependen del máximo; sólo si éste cambia se repintan
+  // los paños con costo (nunca los 2000).
+  let currentMax = 0;
+  let painted = new Set(); // paños pintados con costo (para limpiarlos luego)
 
+  function stats() {
+    let total = 0, count = 0, max = 0;
     for (const k in state.cells) {
       const v = cost(state.cells[k]);
-      const r = Number(k.split("-")[0]);
-      rowTotals[r] += v;
       total += v;
       count++;
       if (v > max) max = v;
     }
+    return { total, count, max };
+  }
 
-    for (let r = 0; r < ROWS; r++) {
-      const rowEl = net.children[r];
-      rowEl.children[0].classList.toggle("has-cost", rowTotals[r] > 0);
-      for (let c = 0; c < COLS; c++) {
-        const el = rowEl.children[c + 1];
-        const item = state.cells[key(r, c)];
-        const v = cost(item);
-        const span = el.firstChild;
-        if (item) {
-          span.textContent = compact(v);
-          el.dataset.l = max > 0 ? Math.max(1, Math.ceil((v / max) * 4)) : 1;
-          el.setAttribute("aria-label", `Paño ${label(r, c)}: ${money.format(v)}${item.concept ? ", " + item.concept : ""}`);
-        } else {
-          span.textContent = "";
-          delete el.dataset.l;
-          el.setAttribute("aria-label", `Paño ${label(r, c)}: vacío`);
-        }
+  function rowTotal(r) {
+    let t = 0;
+    for (let c = 0; c < COLS; c++) t += cost(state.cells[key(r, c)]);
+    return t;
+  }
+
+  function rowHasItems(r) {
+    for (let c = 0; c < COLS; c++) if (state.cells[key(r, c)]) return true;
+    return false;
+  }
+
+  function paintCell(r, c) {
+    const el = cellEl(r, c);
+    const item = state.cells[key(r, c)];
+    const span = el.firstChild;
+    if (item) {
+      const v = cost(item);
+      span.textContent = compact(v);
+      el.dataset.l = currentMax > 0 ? Math.max(1, Math.ceil((v / currentMax) * 4)) : 1;
+      el.setAttribute("aria-label", `Paño ${label(r, c)}: ${money.format(v)}${item.concept ? ", " + item.concept : ""}`);
+    } else {
+      span.textContent = "";
+      delete el.dataset.l;
+      el.setAttribute("aria-label", `Paño ${label(r, c)}: vacío`);
+    }
+  }
+
+  function paintRowLabel(r) {
+    net.children[r].firstChild.classList.toggle("has-cost", rowHasItems(r));
+  }
+
+  function paintTotals(s) {
+    $("#grandTotal").textContent = money.format(s.total);
+    $("#filledCount").textContent = s.count;
+  }
+
+  // Tras cambiar UN paño
+  function refreshCell(r, c) {
+    const s = stats();
+    if (s.max !== currentMax) {
+      currentMax = s.max;
+      for (const k in state.cells) {
+        const [kr, kc] = k.split("-").map(Number);
+        paintCell(kr, kc);
       }
     }
+    paintCell(r, c);
+    painted.add(key(r, c));
+    paintRowLabel(r);
+    paintTotals(s);
+  }
 
-    $("#grandTotal").textContent = money.format(total);
-    $("#filledCount").textContent = count;
-    return { total, count, max, rowTotals };
+  // Repintado completo: al cargar, restaurar, borrar todo o cambiar moneda.
+  // Sólo se tocan paños/filas que tienen o tenían costo.
+  function renderAll() {
+    const s = stats();
+    currentMax = s.max;
+    const now = new Set(Object.keys(state.cells));
+    const rows = new Set();
+    for (const k of new Set([...painted, ...now])) {
+      const [r, c] = k.split("-").map(Number);
+      paintCell(r, c);
+      rows.add(r);
+    }
+    rows.forEach(paintRowLabel);
+    painted = now;
+    paintTotals(s);
   }
 
   // ---------- Edición de paño ----------
@@ -142,7 +174,7 @@
     form.unit.value = item.unit ?? "";
     form.note.value = item.note || "";
     updateSubtotal();
-    cellDialog.showModal();
+    openSheet(cellDialog);
     // En móvil no forzamos el foco para no abrir el teclado sin querer
     if (matchMedia("(pointer: fine)").matches) form.concept.focus();
   }
@@ -166,18 +198,18 @@
     const empty = !item.concept && !item.note && item.unit === "" && item.qty === "";
     if (empty) delete state.cells[key(r, c)];
     else state.cells[key(r, c)] = item;
-    save();
-    render();
     cellDialog.close();
+    refreshCell(r, c);
+    save();
   });
 
   $("#btnCancel").addEventListener("click", () => cellDialog.close());
   $("#btnClearCell").addEventListener("click", () => {
     if (!editing) return;
     delete state.cells[key(editing.r, editing.c)];
-    save();
-    render();
     cellDialog.close();
+    refreshCell(editing.r, editing.c);
+    save();
     toast(`Paño ${label(editing.r, editing.c)} vaciado`);
   });
 
@@ -187,17 +219,32 @@
     const rl = e.target.closest(".rowlabel");
     if (rl) {
       const r = Number(rl.dataset.row);
-      let t = 0;
-      for (let c = 0; c < COLS; c++) t += cost(state.cells[key(r, c)]);
-      toast(`Fila ${r + 1}: ${money.format(t)}`);
+      toast(`Fila ${r + 1}: ${money.format(rowTotal(r))}`);
     }
   });
 
   // ---------- Diálogos genéricos ----------
+  // Se usa show() + scrim propio en vez de showModal(): showModal vuelve inerte
+  // todo el documento (2000 paños) y eso cuesta un recálculo de estilos en cada toque.
+  const scrim = $("#scrim");
+  let openDialog = null;
+
+  function openSheet(d) {
+    if (openDialog && openDialog !== d) openDialog.close();
+    openDialog = d;
+    scrim.hidden = false;
+    d.show();
+  }
+
   document.querySelectorAll("dialog").forEach((d) => {
-    // Cerrar tocando fuera de la hoja
-    d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
+    d.addEventListener("close", () => {
+      if (openDialog === d) { openDialog = null; scrim.hidden = true; }
+    });
     d.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => d.close()));
+  });
+  scrim.addEventListener("click", () => openDialog && openDialog.close());
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && openDialog) openDialog.close();
   });
 
   // ---------- Ir a fila ----------
@@ -225,7 +272,7 @@
   // ---------- Resumen ----------
   const summaryDialog = $("#summaryDialog");
   $("#btnSummary").addEventListener("click", () => {
-    const { total, count, rowTotals } = render();
+    const { total, count } = stats();
     $("#sTotal").textContent = money.format(total);
     $("#sCount").textContent = `${count} / ${ROWS * COLS}`;
     $("#sAvg").textContent = money.format(count ? total / count : 0);
@@ -244,9 +291,9 @@
 
     const list = $("#rowList");
     list.textContent = "";
-    rowTotals.forEach((t, r) => {
-      const filled = Array.from({ length: COLS }, (_, c) => state.cells[key(r, c)]).some(Boolean);
-      if (!filled) return;
+    for (let r = 0; r < ROWS; r++) {
+      if (!rowHasItems(r)) continue;
+      const t = rowTotal(r);
       const li = document.createElement("li");
       const b = document.createElement("button");
       b.type = "button";
@@ -256,14 +303,14 @@
       b.addEventListener("click", () => { summaryDialog.close(); goToRow(r); });
       li.appendChild(b);
       list.appendChild(li);
-    });
+    }
     if (!list.children.length) {
       const li = document.createElement("li");
       li.className = "empty";
       li.textContent = "Aún no hay paños con costo. Toca cualquier paño de la red para agregar uno.";
       list.appendChild(li);
     }
-    summaryDialog.showModal();
+    openSheet(summaryDialog);
   });
 
   // ---------- Menú ----------
@@ -271,14 +318,14 @@
   const currencySel = $("#currency");
   $("#btnMenu").addEventListener("click", () => {
     currencySel.value = state.currency;
-    menuDialog.showModal();
+    openSheet(menuDialog);
   });
 
   currencySel.addEventListener("change", () => {
     state.currency = currencySel.value;
     setFormatter();
     save();
-    render();
+    renderAll();
   });
 
   $("#btnCsv").addEventListener("click", () => {
@@ -325,7 +372,7 @@
       state = { currency: data.currency || state.currency, cells };
       setFormatter();
       save();
-      render();
+      renderAll();
       menuDialog.close();
       toast("Respaldo restaurado");
     } catch (_) {
@@ -337,7 +384,7 @@
     if (!confirm("¿Borrar todos los costos de la red? Esta acción no se puede deshacer.")) return;
     state.cells = {};
     save();
-    render();
+    renderAll();
     menuDialog.close();
     toast("Red vaciada");
   });
@@ -366,5 +413,5 @@
   }
 
   build();
-  render();
+  renderAll();
 })();
